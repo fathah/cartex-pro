@@ -1,0 +1,94 @@
+import prisma from './prisma';
+import { PaymentMethodType, GatewayEnvironment, Prisma } from '@prisma/client';
+
+export class PaymentDB {
+  // --- Payment Methods ---
+
+  static async listMethods() {
+    return await prisma.paymentMethod.findMany({
+      include: {
+        gateways: true
+      },
+      orderBy: { name: 'asc' }
+    });
+  }
+
+  static async getMethod(id: string) {
+    return await prisma.paymentMethod.findUnique({
+      where: { id },
+      include: {
+        gateways: true
+      }
+    });
+  }
+
+  static async createMethod(data: { name: string; code: string; type: PaymentMethodType; description?: string }) {
+    return await prisma.paymentMethod.create({
+      data: {
+        name: data.name,
+        code: data.code,
+        type: data.type,
+        description: data.description,
+        isActive: true
+      }
+    });
+  }
+
+  static async updateMethod(id: string, data: { name?: string; description?: string; isActive?: boolean, gatewayIds?: string[] }) {
+    return await prisma.paymentMethod.update({
+      where: { id },
+      data: {
+        name: data.name,
+        description: data.description,
+        isActive: data.isActive,
+        // If updating connected gateways
+        gateways: data.gatewayIds ? {
+             set: data.gatewayIds.map(gid => ({ id: gid }))
+        } : undefined
+      }
+    });
+  }
+
+  static async deleteMethod(id: string) {
+    return await prisma.paymentMethod.delete({
+      where: { id }
+    });
+  }
+
+  // --- Payment Gateways ---
+
+  static async listGateways() {
+    return await prisma.paymentGateway.findMany({
+      orderBy: { name: 'asc' }
+    });
+  }
+
+  static async createGateway(data: { name: string; code: string; environment: GatewayEnvironment; config: any }) {
+    return await prisma.paymentGateway.create({
+      data: {
+        name: data.name,
+        code: data.code,
+        environment: data.environment,
+        config: data.config
+      }
+    });
+  }
+
+  static async updateGateway(id: string, data: { name?: string; environment?: GatewayEnvironment; config?: any; isActive?: boolean }) {
+    return await prisma.paymentGateway.update({
+      where: { id },
+      data: {
+        name: data.name,
+        environment: data.environment,
+        config: data.config,
+        isActive: data.isActive
+      }
+    });
+  }
+
+  static async deleteGateway(id: string) {
+    return await prisma.paymentGateway.delete({
+      where: { id }
+    });
+  }
+}

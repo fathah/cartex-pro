@@ -1,0 +1,500 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------------------------------------------------------
+// ENUMS
+// -----------------------------------------------------------------------------
+
+enum UserRole {
+  SUPER_ADMIN // Platform owner/admin
+  ADMIN // Store admin
+  STAFF // Store staff
+  CUSTOMER // End customer
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  FULFILLED
+  CANCELLED
+  REFUNDED
+}
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum InventoryPolicy {
+  DENY
+  CONTINUE
+}
+
+enum CartStatus {
+  ACTIVE
+  CONVERTED
+  ABANDONED
+}
+
+// -----------------------------------------------------------------------------
+// SETTINGS (Single Tenant Global Config)
+// -----------------------------------------------------------------------------
+
+model Settings {
+  id String @id @default("global")
+
+  // Branding
+  storeName   String  @default("My Store")
+  logoUrl     String?
+  faviconUrl  String?
+  themeConfig Json?   @default("{}") // Colors, fonts, layout settings
+
+  // Commerce Settings
+  currency String @default("USD")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+// -----------------------------------------------------------------------------
+// USERS & AUTH
+// -----------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  ziqxId       String?  @unique
+  passwordHash String
+  firstName    String?
+  lastName     String?
+  role         UserRole @default(ADMIN)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@map("users")
+}
+
+// -----------------------------------------------------------------------------
+// PRODUCT CATALOG
+// -----------------------------------------------------------------------------
+
+model Product {
+  id              String  @id @default(cuid())
+  name            String
+  slug            String  @unique
+  description     String?
+  descriptionHtml String?
+
+  status ProductStatus @default(DRAFT)
+
+  // Media
+
+  // Organization
+  collections Collection[]
+
+  // Options (e.g. Size, Color)
+  options Option[]
+
+  // Variants (Combinations of options)
+  variants ProductVariant[]
+
+  // SEO
+  seoTitle String?
+  seoDesc  String?
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  deletedAt     DateTime?
+  mediaProducts MediaProduct[]
+
+  @@map("products")
+}
+
+model Option {
+  id        String @id @default(cuid())
+  productId String
+  name      String // e.g. "Size", "Color"
+  position  Int    @default(0)
+
+  values OptionValue[]
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("options")
+}
+
+model OptionValue {
+  id       String @id @default(cuid())
+  optionId String
+  value    String // e.g. "Small", "Red"
+
+  // Relations to variants that use this value
+  variants ProductVariant[]
+
+  option Option @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  @@map("option_values")
+}
+
+model ProductVariant {
+  id        String @id @default(cuid())
+  productId String
+
+  title   String // Auto-generated name e.g. "Small / Red" or "Default Variant"
+  sku     String?
+  barcode String?
+
+  // Pricing
+  price          Decimal  @db.Decimal(10, 2)
+  compareAtPrice Decimal? @db.Decimal(10, 2)
+  costPrice      Decimal? @db.Decimal(10, 2)
+
+  // Inventory
+  inventoryPolicy InventoryPolicy @default(DENY)
+  inventory       Inventory?
+
+  // Options associated with this variant
+  selectedOptions OptionValue[]
+  cartItems       CartItem[]
+
+  // Media specific to this variant
+  imageId String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  image   Media?  @relation(fields: [imageId], references: [id])
+
+  @@map("product_variants")
+}
+
+model Inventory {
+  id        String @id @default(cuid())
+  variantId String @unique
+
+  quantity Int @default(0)
+  reserved Int @default(0) // Locked in carts
+
+  updatedAt DateTime @updatedAt
+
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@map("inventories")
+}
+
+model Collection {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String  @unique
+  description String?
+  imageId     String?
+
+  products Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  image   Media?  @relation(fields: [mediaId], references: [id])
+  mediaId String?
+
+  @@map("collections")
+}
+
+model Media {
+  id String @id @default(cuid())
+
+  url  String
+  alt  String?
+  type String  @default("IMAGE") // IMAGE, VIDEO
+
+  createdAt       DateTime         @default(now())
+  productVariants ProductVariant[]
+  collections     Collection[]
+  mediaProducts   MediaProduct[]
+
+  @@map("media")
+}
+
+model MediaProduct {
+  id        String @id @default(cuid())
+  mediaId   String
+  productId String
+
+  media   Media   @relation(fields: [mediaId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("media_products")
+}
+
+// -----------------------------------------------------------------------------
+// CUSTOMERS & ORDERS
+// -----------------------------------------------------------------------------
+
+model Customer {
+  id String @id @default(cuid())
+
+  email     String?
+  phone     String?
+  firstName String?
+  lastName  String?
+
+  isGuest Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders    Order[]
+  addresses Address[]
+  carts     Cart[]
+
+  @@map("customers")
+}
+
+model Address {
+  id         String @id @default(cuid())
+  customerId String
+
+  type      String  @default("SHIPPING") // SHIPPING, BILLING
+  firstName String?
+  lastName  String?
+
+  address1 String
+  address2 String?
+  city     String
+  province String?
+  zip      String?
+  country  String
+  phone    String?
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@map("addresses")
+}
+
+model Cart {
+  id String @id @default(cuid())
+
+  customerId String?
+  status     CartStatus @default(ACTIVE)
+
+  items CartItem[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  customer  Customer? @relation(fields: [customerId], references: [id])
+
+  @@map("carts")
+}
+
+model CartItem {
+  id String @id @default(cuid())
+
+  cartId String
+
+  quantity Int @default(1)
+
+  cart             Cart            @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productVariant   ProductVariant? @relation(fields: [productVariantId], references: [id])
+  productVariantId String?
+
+  @@map("cart_items")
+}
+
+model Order {
+  id         String @id @default(cuid())
+  customerId String
+
+  orderNumber Int @unique @default(autoincrement()) // Simple auto-increment for single tenant
+
+  totalPrice    Decimal @db.Decimal(10, 2)
+  subtotal      Decimal @db.Decimal(10, 2)
+  taxTotal      Decimal @db.Decimal(10, 2)
+  shippingTotal Decimal @db.Decimal(10, 2)
+
+  status            OrderStatus @default(PENDING)
+  paymentStatus     String      @default("PENDING") // PENDING, PAID, FAILED
+  fulfillmentStatus String      @default("UNFULFILLED")
+
+  items OrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customer       Customer        @relation(fields: [customerId], references: [id])
+  paymentIntents PaymentIntent[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  variantId String?
+  productId String?
+  sku       String?
+  options   Json?
+
+  title    String
+  quantity Int
+  price    Decimal @db.Decimal(10, 2)
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("order_items")
+}
+
+model ShippingMethod {
+  id          String  @id @default(cuid())
+  name        String // "Standard Delivery", "Express", "Free Shipping"
+  code        String  @unique
+  description String?
+  isActive    Boolean @default(true)
+
+  rates ShippingRate[]
+  zones ShippingZone[] @relation("MethodZones")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ShippingRate {
+  id               String         @id @default(cuid())
+  shippingMethodId String
+  shippingMethod   ShippingMethod @relation(fields: [shippingMethodId], references: [id])
+
+  type  ShippingRateType
+  price Decimal          @default(0)
+
+  minOrderAmount Decimal? // Free shipping threshold
+  maxOrderAmount Decimal?
+
+  priority Int     @default(0)
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+}
+
+enum ShippingRateType {
+  FLAT // Fixed amount (e.g., 20 AED)
+  CONDITIONAL // Free above X amount
+  WEIGHT // Based on cart weight
+  PRICE // Based on cart price range
+}
+
+model ShippingZone {
+  id   String @id @default(cuid())
+  name String
+
+  methods ShippingMethod[] @relation("MethodZones")
+
+  areas ShippingZoneArea[]
+}
+
+model ShippingZoneArea {
+  id             String       @id @default(cuid())
+  shippingZoneId String
+  shippingZone   ShippingZone @relation(fields: [shippingZoneId], references: [id])
+
+  country String
+  state   String
+  city    String?
+  zipCode String?
+}
+
+model PaymentMethod {
+  id          String  @id @default(cuid())
+  name        String // "Credit / Debit Card", "Cash on Delivery"
+  code        String  @unique // CARD, COD, APPLE_PAY
+  description String?
+
+  type     PaymentMethodType
+  isActive Boolean           @default(true)
+
+  gateways PaymentGateway[] @relation("MethodGateways")
+
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  paymentIntents PaymentIntent[]
+}
+
+enum PaymentMethodType {
+  CARD
+  COD
+  WALLET
+  BNPL
+  BANK_TRANSFER
+}
+
+model PaymentGateway {
+  id   String @id @default(cuid())
+  name String // Stripe, Checkout.com, PayPal
+  code String @unique
+
+  isActive    Boolean            @default(true)
+  environment GatewayEnvironment
+
+  config Json // encrypted keys, webhook secrets (use KMS)
+
+  methods PaymentMethod[] @relation("MethodGateways")
+
+  createdAt      DateTime        @default(now())
+  paymentIntents PaymentIntent[]
+}
+
+enum GatewayEnvironment {
+  TEST
+  LIVE
+}
+
+model PaymentIntent {
+  id String @id @default(cuid())
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id])
+
+  paymentMethodId String
+  paymentMethod   PaymentMethod @relation(fields: [paymentMethodId], references: [id])
+
+  gatewayId String?
+  gateway   PaymentGateway? @relation(fields: [gatewayId], references: [id])
+
+  amount   Decimal
+  currency String
+
+  status     PaymentIntentStatus
+  gatewayRef String? // payment_intent_id, charge_id
+
+  response Json? // gateway response
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum PaymentIntentStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
+  CANCELLED
+}

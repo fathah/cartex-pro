@@ -1,0 +1,17 @@
+import React from 'react';
+import StoreHeader from '@/components/store/header';
+import StoreFooter from '@/components/store/footer';
+import CartDrawer from "@/components/store/cart-drawer";
+
+export default function StoreLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col min-h-screen font-[family-name:var(--font-geist-sans)]">
+      <StoreHeader />
+      <main className="flex-grow">
+        {children}
+        <CartDrawer />
+      </main>
+      <StoreFooter />
+    </div>
+  );
+}
