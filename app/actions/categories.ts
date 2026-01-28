@@ -1,6 +1,6 @@
 'use server';
 
-import CollectionDB from '@/db/collection.ts';
+import CollectionDB from '@/db/collection';
 import { revalidatePath } from 'next/cache';
 
 export async function getCategories() {

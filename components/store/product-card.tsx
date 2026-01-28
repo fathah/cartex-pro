@@ -16,13 +16,16 @@ export default function ProductCard({ product }: { product: any }) {
     e.preventDefault();
     e.stopPropagation();
     
+    const variantId = product.variants?.[0]?.id;
     addItem({
-      id: product.id,
+      key: `${product.id}${variantId ? `-${variantId}` : ''}`,
+      productId: product.id,
       name: product.name,
       price: Number(price),
       quantity: 1,
       image: product.mediaProducts?.[0]?.media?.url,
-      variantId: product.variants?.[0]?.id
+      variantId: variantId,
+      slug: product.slug
     });
     message.success("Added to cart");
   };
