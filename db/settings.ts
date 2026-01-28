@@ -12,25 +12,20 @@ export default class SettingsDB {
   private static GLOBAL_ID = "global";
 
   /**
-   * Get the global settings. If not found, create default settings.
+   * Get the global settings. Creates default settings atomically if not found.
+   * Uses upsert to prevent race conditions during parallel builds.
    */
   static async get() {
-    const settings = await prisma.settings.findUnique({
+    return await prisma.settings.upsert({
       where: { id: this.GLOBAL_ID },
+      update: {}, // Don't update if exists
+      create: {
+        id: this.GLOBAL_ID,
+        storeName: "My Store",
+        currency: "USD",
+        themeConfig: {},
+      },
     });
-
-    if (!settings) {
-      return await prisma.settings.create({
-        data: {
-          id: this.GLOBAL_ID,
-          storeName: "My Store",
-          currency: "USD",
-          themeConfig: {},
-        },
-      });
-    }
-
-    return settings;
   }
 
   /**

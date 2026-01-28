@@ -35,7 +35,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ vars.NODE_VERSION || '20'}}
+          node-version: ${{ vars.NODE_VERSION || '24'}}
 
       - name: Check required secrets and vars
         run: |
@@ -56,21 +56,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Check if Prisma exists
-        id: prisma-check
-        run: |
-          if [ -f "prisma/schema.prisma" ]; then
-            echo "prisma=true" >> $GITHUB_OUTPUT
-          else
-            echo "prisma=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Generate Prisma Client (if needed)
-        if: steps.prisma-check.outputs.prisma == 'true'
         run: npx prisma generate
 
       - name: Run Prisma Migrate (if needed)
-        if: steps.prisma-check.outputs.prisma == 'true'
         run: npx prisma migrate deploy
 
       - name: Build Next.js
